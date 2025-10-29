@@ -201,14 +201,14 @@ public class StarRocksSinkTask extends SinkTask  {
 
     @Override
     public void start(Map<String, String> props) {
-        LOG.info("Starrocks sink task starting. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task starting. version is {}", Util.getVersionInfo());
         this.props = props;
         loadProperties = buildLoadProperties();
         loadManager = buildLoadManager(loadProperties);
         topic2Table = getTopicToTableMap(props);
         jsonConverter = createJsonConverter();
         maxRetryTimes = Long.parseLong(props.getOrDefault(StarRocksSinkConnectorConfig.SINK_MAXRETRIES, "3"));
-        LOG.info("Starrocks sink task started. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task started. version is {}", Util.getVersionInfo());
     }
 
     static Map<String, String> getTopicToTableMap(Map<String, String> config) {
@@ -248,11 +248,15 @@ public class StarRocksSinkTask extends SinkTask  {
             return null;
         }
         if (sinkRecord.value() == null) {
-            LOG.debug(String.format("Sink record value is null, the record is %s", sinkRecord.toString()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Sink record value is null, the record is %s", sinkRecord.toString()));
+            }
             return null;
         }
         if (sinkRecord.valueSchema() == null) {
-            LOG.debug(String.format("Sink record value schema is null, the record is %s", sinkRecord.toString()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Sink record value schema is null, the record is %s", sinkRecord.toString()));
+            }
         }
 
         if (sinkType == SinkType.CSV) {
@@ -282,8 +286,8 @@ public class StarRocksSinkTask extends SinkTask  {
         long start = System.currentTimeMillis();
         if (maxRetryTimes != -1) {
             if (retryCount > maxRetryTimes) {
-                LOG.error("Starrocks Put failure " + retryCount + " times, which bigger than maxRetryTimes "
-                            + maxRetryTimes + ", sink task will be stopped");
+                LOG.error("Starrocks Put failure {} times, which bigger than maxRetryTimes {}, sink task will be stopped",
+                            retryCount, maxRetryTimes);
                 assert sdkException != null;
                 LOG.error("Error message is ", sdkException);
                 throw new RuntimeException(sdkException);
@@ -299,7 +303,9 @@ public class StarRocksSinkTask extends SinkTask  {
             if (firstRecord == null) {
                 firstRecord = record;
             }
-            LOG.debug("Received record: " + record.toString());
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Received record: {}", record);
+            }
 
             String topic = record.topic();
             // The sdk does not provide the ability to clean up exceptions, that is to say, according to the current implementation of the SDK,
@@ -321,8 +327,8 @@ public class StarRocksSinkTask extends SinkTask  {
                 long estimatedOverhead = sinkType == SinkType.JSON ? 10 : 2; 
                 currentBufferBytes += rowSizeBytes + estimatedOverhead;
             } catch (Exception writeException) {
-                LOG.error("Starrocks Put error: " + writeException.getMessage() +
-                          " topic, partition, offset is " + topic + ", " + record.kafkaPartition() + ", " + record.kafkaOffset());
+                LOG.error("Starrocks Put error: {} topic, partition, offset is {}, {}, {}", 
+                          writeException.getMessage(), topic, record.kafkaPartition(), record.kafkaOffset());
                 writeException.printStackTrace();
                 occurException = true;
                 e = writeException;
@@ -399,6 +405,6 @@ public class StarRocksSinkTask extends SinkTask  {
 
     @Override
     public void stop() {
-        LOG.info("Starrocks sink task stopped. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task stopped. version is {}", Util.getVersionInfo());
     }
 }

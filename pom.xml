@@ -12,9 +12,17 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <starrocks.sdk.version>1.0</starrocks.sdk.version>
     </properties>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+        
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -170,7 +178,7 @@
         <dependency>
             <groupId>com.starrocks</groupId>
             <artifactId>starrocks-stream-load-sdk</artifactId>
-            <version>1.0</version>
+            <version>${starrocks.sdk.version}</version>
         </dependency>
 
         <dependency>

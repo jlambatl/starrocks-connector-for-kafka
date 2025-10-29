@@ -23,12 +23,59 @@ package com.starrocks.connector.kafka;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 public class Util {
     private static final Logger LOG = LoggerFactory.getLogger(Util.class);
-    public static final String VERSION = "1.0.3";
+    private static final String UNKNOWN_VERSION = "unknown";
+    private static final Properties versionProperties = loadVersionProperties();
+    
+    public static final String VERSION = getConnectorVersion();
+    public static final String STARROCKS_SDK_VERSION = getStarRocksSDKVersion();
+    
+    // Private constructor to prevent instantiation
+    private Util() {
+        // Utility class
+    }
+    
+    private static Properties loadVersionProperties() {
+        Properties props = new Properties();
+        try (InputStream input = Util.class.getClassLoader().getResourceAsStream("version.properties")) {
+            if (input == null) {
+                LOG.warn("version.properties not found, using fallback versions");
+                return props;
+            }
+            
+            props.load(input);
+            LOG.debug("Loaded version properties: {}", props);
+        } catch (IOException e) {
+            LOG.warn("Failed to load version from properties file", e);
+        }
+        return props;
+    }
+    
+    private static String getConnectorVersion() {
+        String version = versionProperties.getProperty("version", UNKNOWN_VERSION);
+        LOG.debug("Connector version: {}", version);
+        return version;
+    }
+    
+    private static String getStarRocksSDKVersion() {
+        String version = versionProperties.getProperty("starrocks.sdk.version", UNKNOWN_VERSION);
+        LOG.debug("StarRocks SDK version: {}", version);
+        return version;
+    }
+    
+    /**
+     * Get version information as a formatted string
+     */
+    public static String getVersionInfo() {
+        return String.format("StarRocks Kafka Connector v%s (stream-load-sdk v%s)", VERSION, STARROCKS_SDK_VERSION);
+    }
 
     static boolean isValidStarrocksTableName(String tableName) {
         return tableName.matches("^([_a-zA-Z]{1}[_$a-zA-Z0-9]+\\.){0,2}[_a-zA-Z]{1}[_$a-zA-Z0-9]+$");

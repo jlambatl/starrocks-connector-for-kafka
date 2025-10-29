@@ -44,12 +44,12 @@ public class StarRocksSinkConnector extends SinkConnector {
     @Override
     public void start(final Map<String, String> parsedConfig) {
         config = new HashMap<>(parsedConfig);
-        LOG.info("StarRocks sink connector started. version is " + Util.VERSION);
+        LOG.info("StarRocks sink connector started. version is {}", Util.getVersionInfo());
     }
 
     @Override
     public void stop() {
-        LOG.info("StarRocks sink connector stopped. version is " + Util.VERSION);
+        LOG.info("StarRocks sink connector stopped. version is {}", Util.getVersionInfo());
     }
 
     /** @return Sink task class */
@@ -96,10 +96,10 @@ public class StarRocksSinkConnector extends SinkConnector {
             connectorConfigs.put(SINK_MAXRETRIES, "3");
         }
         Config result = super.validate(connectorConfigs);
-        for (String config : StarRocksSinkConnectorConfig.mustRequiredConfigs) {
+        for (String configName : StarRocksSinkConnectorConfig.mustRequiredConfigs) {
             for (ConfigValue v : result.configValues()) {
-                if (v.name().equals(config) && !connectorConfigs.containsKey(config)) {
-                    v.addErrorMessage("You must specify " + config);
+                if (v.name().equals(configName) && !connectorConfigs.containsKey(configName)) {
+                    v.addErrorMessage("You must specify " + configName);
                 }
             }
         }
@@ -109,6 +109,6 @@ public class StarRocksSinkConnector extends SinkConnector {
     /** @return connector version */
     @Override
     public String version() {
-        return Util.VERSION;
+        return Util.getVersionInfo();
     }
 }
