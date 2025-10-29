@@ -112,7 +112,7 @@ public class Util {
             topic2Table.put(tt[0].trim(), tt[1].trim());
         }
         if (isInvalid) {
-            String errMsg = String.format("Invalid {} config format: {}", StarRocksSinkConnectorConfig.STARROCKS_TOPIC2TABLE_MAP, input);
+            String errMsg = String.format("Invalid %s config format: %s", StarRocksSinkConnectorConfig.STARROCKS_TOPIC2TABLE_MAP, input);
             throw new RuntimeException(errMsg);
         }
         return topic2Table;
