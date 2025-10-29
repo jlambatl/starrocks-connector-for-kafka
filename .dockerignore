@@ -1,0 +1,44 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Maven files
+target/
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Docker files (to avoid copying into build context)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files (since we skip tests in build)
+src/test/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Build artifacts
+*.jar
+*.war
+*.zip
+*.tar.gz
