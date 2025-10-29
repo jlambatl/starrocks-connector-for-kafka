@@ -296,26 +296,26 @@ public class StarRocksSinkTask extends SinkTask  {
         Iterator<SinkRecord> it = records.iterator();
         boolean occurException = false;
         Exception e = null;
-        SinkRecord record = null;
+        SinkRecord sinkRecord = null;
         SinkRecord firstRecord = null;
         while (it.hasNext()) {
-            record = it.next();
+            sinkRecord = it.next();
             if (firstRecord == null) {
-                firstRecord = record;
+                firstRecord = sinkRecord;
             }
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Received record: {}", record);
+                LOG.debug("Received record: {}", sinkRecord);
             }
 
-            String topic = record.topic();
+            String topic = sinkRecord.topic();
             // The sdk does not provide the ability to clean up exceptions, that is to say, according to the current implementation of the SDK,
             // after an Exception occurs, the SDK must be re-initialized, which is based on flink:
             // 1. When an exception occurs, put will continue to fail, at which point we do nothing and let put move forward.
             // 2. Because the framework periodically calls the preCommit method, we can sense if an exception has occurred in
             //    this method. In the case of an exception, we initialize the new SDK and then throw an exception to the framework.
             //    In this case, the framework repulls the data from the commit point and then moves forward.
-            String row = getRecordFromSinkRecord(record);
-            LOG.debug("Parsed row: " + row);
+            String row = getRecordFromSinkRecord(sinkRecord);
+            LOG.debug("Parsed row: {}", row);
             if (row == null) {
                 continue;
             }
@@ -327,8 +327,8 @@ public class StarRocksSinkTask extends SinkTask  {
                 long estimatedOverhead = sinkType == SinkType.JSON ? 10 : 2; 
                 currentBufferBytes += rowSizeBytes + estimatedOverhead;
             } catch (Exception writeException) {
-                LOG.error("Starrocks Put error: {} topic, partition, offset is {}, {}, {}", 
-                          writeException.getMessage(), topic, record.kafkaPartition(), record.kafkaOffset());
+                LOG.error("Starrocks Put error: {} topic, partition, offset is {}, {}, {}",
+                          writeException.getMessage(), topic, sinkRecord.kafkaPartition(), sinkRecord.kafkaOffset());
                 writeException.printStackTrace();
                 occurException = true;
                 e = writeException;
@@ -341,15 +341,15 @@ public class StarRocksSinkTask extends SinkTask  {
                     e.getMessage(), currentBufferBytes, 
                     firstRecord == null ? null : firstRecord.kafkaPartition(),
                     firstRecord == null ? null : firstRecord.kafkaOffset(),
-                    record == null ? null : record.kafkaPartition(),
-                    record == null ? null : record.kafkaOffset(), System.currentTimeMillis() - start);
+                    sinkRecord == null ? null : sinkRecord.kafkaPartition(),
+                    sinkRecord == null ? null : sinkRecord.kafkaOffset(), System.currentTimeMillis() - start);
         } else {
             LOG.info("Starrocks Put success, currentBufferBytes {} recordRange [{}:{}-{}:{}] cost {}ms",
                     currentBufferBytes, 
                     firstRecord == null ? null : firstRecord.kafkaPartition(),
                     firstRecord == null ? null : firstRecord.kafkaOffset(),
-                    record == null ? null : record.kafkaPartition(),
-                    record == null ? null : record.kafkaOffset(), System.currentTimeMillis() - start);
+                    sinkRecord == null ? null : sinkRecord.kafkaPartition(),
+                    sinkRecord == null ? null : sinkRecord.kafkaOffset(), System.currentTimeMillis() - start);
         }
     }
 
