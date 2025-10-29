@@ -50,6 +50,7 @@ public class StarRocksSinkConnectorConfig {
     public static final String STARROCKS_USERNAME = "starrocks.username";
     public static final String STARROCKS_PASSWORD = "starrocks.password";
     // The interval at which data is flushed. Valid values: 1000 to 3600000.
+    // Increased default to improve batching efficiency
     public static final String BUFFERFLUSH_INTERVALMS = "bufferflush.intervalms";
     // Stream Load parameters, which controls the load behavior.
     public static final String SINK_PROPERTIES_PREFIX = "sink.properties.";
@@ -151,7 +152,7 @@ public class StarRocksSinkConnectorConfig {
                 ).define(
                         BUFFERFLUSH_INTERVALMS,
                         ConfigDef.Type.LONG,
-                        1000,
+                        30000,  // Increased from 1000ms to 30000ms (30 seconds) for better batching
                         ConfigDef.Range.between(1000, 3600000),
                         ConfigDef.Importance.LOW,
                         "the interval at which data is sent in bulk to starrocks",

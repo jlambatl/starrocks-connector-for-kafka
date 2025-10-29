@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -314,7 +315,11 @@ public class StarRocksSinkTask extends SinkTask  {
             }
             try {
                 loadManager.write(null, database, getTableFromTopic(topic), row);
-                currentBufferBytes += row.getBytes().length;
+                // Improved size calculation - account for JSON overhead and UTF-8 encoding
+                long rowSizeBytes = row.getBytes(StandardCharsets.UTF_8).length;
+                // Add small overhead for JSON formatting and delimiters
+                long estimatedOverhead = sinkType == SinkType.JSON ? 10 : 2; 
+                currentBufferBytes += rowSizeBytes + estimatedOverhead;
             } catch (Exception writeException) {
                 LOG.error("Starrocks Put error: " + writeException.getMessage() +
                           " topic, partition, offset is " + topic + ", " + record.kafkaPartition() + ", " + record.kafkaOffset());
@@ -345,17 +350,22 @@ public class StarRocksSinkTask extends SinkTask  {
     @Override
     public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         long start = System.currentTimeMillis();
-        // return previous offset when buffer size and flush interval are not reached
-        if (currentBufferBytes < buffMaxbytes && System.currentTimeMillis() - lastFlushTime < bufferFlushInterval) {
-            LOG.info("Starrocks skip preCommit currentBufferBytes {} less than buffMaxbytes {}"
-                    + " or SinceLastFlushTime {} less than bufferFlushInterval {}",
-                    currentBufferBytes, buffMaxbytes, System.currentTimeMillis() - lastFlushTime, bufferFlushInterval);
+        long timeSinceLastFlush = System.currentTimeMillis() - lastFlushTime;
+        
+        // Improved batching logic: flush if either condition is met (OR logic instead of AND)
+        // This allows for better batching by prioritizing size-based batching over time-based
+        boolean shouldFlush = currentBufferBytes >= buffMaxbytes || timeSinceLastFlush >= bufferFlushInterval;
+        
+        if (!shouldFlush) {
+            LOG.debug("Starrocks skip preCommit - currentBufferBytes {} (max: {}), timeSinceLastFlush {} ms (max: {} ms)",
+                    currentBufferBytes, buffMaxbytes, timeSinceLastFlush, bufferFlushInterval);
             return Collections.emptyMap();
         }
+        
         Throwable flushException = null;
         try {
-            LOG.info("Starrocks preCommit flush currentBufferBytes {} and SinceLastFlushTime {}",
-                    currentBufferBytes, System.currentTimeMillis() - lastFlushTime);
+            LOG.info("Starrocks preCommit flush triggered - currentBufferBytes: {} bytes, timeSinceLastFlush: {} ms",
+                    currentBufferBytes, timeSinceLastFlush);
             loadManager.flush();
         } catch (Exception e) {
             flushException = e;

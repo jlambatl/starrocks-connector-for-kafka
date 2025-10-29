@@ -90,7 +90,7 @@ public class StarRocksSinkConnector extends SinkConnector {
             connectorConfigs.put(CONNECT_TIMEOUTMS, "100");
         }
         if (!connectorConfigs.containsKey(BUFFERFLUSH_INTERVALMS)) {
-            connectorConfigs.put(BUFFERFLUSH_INTERVALMS, "1000");
+            connectorConfigs.put(BUFFERFLUSH_INTERVALMS, "30000");  // Increased from 1000ms to 30000ms for better batching
         }
         if (!connectorConfigs.containsKey(SINK_MAXRETRIES)) {
             connectorConfigs.put(SINK_MAXRETRIES, "3");
