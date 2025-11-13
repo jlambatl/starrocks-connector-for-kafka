@@ -22,6 +22,7 @@ package com.starrocks.connector.kafka;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
@@ -43,12 +44,12 @@ public class StarRocksSinkConnector extends SinkConnector {
     @Override
     public void start(final Map<String, String> parsedConfig) {
         config = new HashMap<>(parsedConfig);
-        LOG.info("StarRocks sink connector started. version is " + Util.VERSION);
+        LOG.info("StarRocks sink connector started. version is {}", Util.getVersionInfo());
     }
 
     @Override
     public void stop() {
-        LOG.info("StarRocks sink connector stopped. version is " + Util.VERSION);
+        LOG.info("StarRocks sink connector stopped. version is {}", Util.getVersionInfo());
     }
 
     /** @return Sink task class */
@@ -89,16 +90,16 @@ public class StarRocksSinkConnector extends SinkConnector {
             connectorConfigs.put(CONNECT_TIMEOUTMS, "100");
         }
         if (!connectorConfigs.containsKey(BUFFERFLUSH_INTERVALMS)) {
-            connectorConfigs.put(BUFFERFLUSH_INTERVALMS, "1000");
+            connectorConfigs.put(BUFFERFLUSH_INTERVALMS, "30000");  // Increased from 1000ms to 30000ms for better batching
         }
         if (!connectorConfigs.containsKey(SINK_MAXRETRIES)) {
             connectorConfigs.put(SINK_MAXRETRIES, "3");
         }
         Config result = super.validate(connectorConfigs);
-        for (String config : StarRocksSinkConnectorConfig.mustRequiredConfigs) {
+        for (String configName : StarRocksSinkConnectorConfig.mustRequiredConfigs) {
             for (ConfigValue v : result.configValues()) {
-                if (v.name().equals(config) && !connectorConfigs.containsKey(config)) {
-                    v.addErrorMessage("You must specify " + config);
+                if (v.name().equals(configName) && !connectorConfigs.containsKey(configName)) {
+                    v.addErrorMessage("You must specify " + configName);
                 }
             }
         }
@@ -108,6 +109,6 @@ public class StarRocksSinkConnector extends SinkConnector {
     /** @return connector version */
     @Override
     public String version() {
-        return Util.VERSION;
+        return Util.getVersionInfo();
     }
 }

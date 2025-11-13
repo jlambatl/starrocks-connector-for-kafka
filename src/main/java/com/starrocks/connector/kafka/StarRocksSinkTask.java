@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -200,14 +201,14 @@ public class StarRocksSinkTask extends SinkTask  {
 
     @Override
     public void start(Map<String, String> props) {
-        LOG.info("Starrocks sink task starting. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task starting. version is {}", Util.getVersionInfo());
         this.props = props;
         loadProperties = buildLoadProperties();
         loadManager = buildLoadManager(loadProperties);
         topic2Table = getTopicToTableMap(props);
         jsonConverter = createJsonConverter();
         maxRetryTimes = Long.parseLong(props.getOrDefault(StarRocksSinkConnectorConfig.SINK_MAXRETRIES, "3"));
-        LOG.info("Starrocks sink task started. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task started. version is {}", Util.getVersionInfo());
     }
 
     static Map<String, String> getTopicToTableMap(Map<String, String> config) {
@@ -247,11 +248,15 @@ public class StarRocksSinkTask extends SinkTask  {
             return null;
         }
         if (sinkRecord.value() == null) {
-            LOG.debug(String.format("Sink record value is null, the record is %s", sinkRecord.toString()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Sink record value is null, the record is %s", sinkRecord.toString()));
+            }
             return null;
         }
         if (sinkRecord.valueSchema() == null) {
-            LOG.debug(String.format("Sink record value schema is null, the record is %s", sinkRecord.toString()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Sink record value schema is null, the record is %s", sinkRecord.toString()));
+            }
         }
 
         if (sinkType == SinkType.CSV) {
@@ -281,8 +286,8 @@ public class StarRocksSinkTask extends SinkTask  {
         long start = System.currentTimeMillis();
         if (maxRetryTimes != -1) {
             if (retryCount > maxRetryTimes) {
-                LOG.error("Starrocks Put failure " + retryCount + " times, which bigger than maxRetryTimes "
-                            + maxRetryTimes + ", sink task will be stopped");
+                LOG.error("Starrocks Put failure {} times, which bigger than maxRetryTimes {}, sink task will be stopped",
+                            retryCount, maxRetryTimes);
                 assert sdkException != null;
                 LOG.error("Error message is ", sdkException);
                 throw new RuntimeException(sdkException);
@@ -291,33 +296,39 @@ public class StarRocksSinkTask extends SinkTask  {
         Iterator<SinkRecord> it = records.iterator();
         boolean occurException = false;
         Exception e = null;
-        SinkRecord record = null;
+        SinkRecord sinkRecord = null;
         SinkRecord firstRecord = null;
         while (it.hasNext()) {
-            record = it.next();
+            sinkRecord = it.next();
             if (firstRecord == null) {
-                firstRecord = record;
+                firstRecord = sinkRecord;
             }
-            LOG.debug("Received record: " + record.toString());
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Received record: {}", sinkRecord);
+            }
 
-            String topic = record.topic();
+            String topic = sinkRecord.topic();
             // The sdk does not provide the ability to clean up exceptions, that is to say, according to the current implementation of the SDK,
             // after an Exception occurs, the SDK must be re-initialized, which is based on flink:
             // 1. When an exception occurs, put will continue to fail, at which point we do nothing and let put move forward.
             // 2. Because the framework periodically calls the preCommit method, we can sense if an exception has occurred in
             //    this method. In the case of an exception, we initialize the new SDK and then throw an exception to the framework.
             //    In this case, the framework repulls the data from the commit point and then moves forward.
-            String row = getRecordFromSinkRecord(record);
-            LOG.debug("Parsed row: " + row);
+            String row = getRecordFromSinkRecord(sinkRecord);
+            LOG.debug("Parsed row: {}", row);
             if (row == null) {
                 continue;
             }
             try {
                 loadManager.write(null, database, getTableFromTopic(topic), row);
-                currentBufferBytes += row.getBytes().length;
+                // Improved size calculation - account for JSON overhead and UTF-8 encoding
+                long rowSizeBytes = row.getBytes(StandardCharsets.UTF_8).length;
+                // Add small overhead for JSON formatting and delimiters
+                long estimatedOverhead = sinkType == SinkType.JSON ? 10 : 2; 
+                currentBufferBytes += rowSizeBytes + estimatedOverhead;
             } catch (Exception writeException) {
-                LOG.error("Starrocks Put error: " + writeException.getMessage() +
-                          " topic, partition, offset is " + topic + ", " + record.kafkaPartition() + ", " + record.kafkaOffset());
+                LOG.error("Starrocks Put error: {} topic, partition, offset is {}, {}, {}",
+                          writeException.getMessage(), topic, sinkRecord.kafkaPartition(), sinkRecord.kafkaOffset());
                 writeException.printStackTrace();
                 occurException = true;
                 e = writeException;
@@ -330,32 +341,37 @@ public class StarRocksSinkTask extends SinkTask  {
                     e.getMessage(), currentBufferBytes, 
                     firstRecord == null ? null : firstRecord.kafkaPartition(),
                     firstRecord == null ? null : firstRecord.kafkaOffset(),
-                    record == null ? null : record.kafkaPartition(),
-                    record == null ? null : record.kafkaOffset(), System.currentTimeMillis() - start);
+                    sinkRecord == null ? null : sinkRecord.kafkaPartition(),
+                    sinkRecord == null ? null : sinkRecord.kafkaOffset(), System.currentTimeMillis() - start);
         } else {
             LOG.info("Starrocks Put success, currentBufferBytes {} recordRange [{}:{}-{}:{}] cost {}ms",
                     currentBufferBytes, 
                     firstRecord == null ? null : firstRecord.kafkaPartition(),
                     firstRecord == null ? null : firstRecord.kafkaOffset(),
-                    record == null ? null : record.kafkaPartition(),
-                    record == null ? null : record.kafkaOffset(), System.currentTimeMillis() - start);
+                    sinkRecord == null ? null : sinkRecord.kafkaPartition(),
+                    sinkRecord == null ? null : sinkRecord.kafkaOffset(), System.currentTimeMillis() - start);
         }
     }
 
     @Override
     public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
         long start = System.currentTimeMillis();
-        // return previous offset when buffer size and flush interval are not reached
-        if (currentBufferBytes < buffMaxbytes && System.currentTimeMillis() - lastFlushTime < bufferFlushInterval) {
-            LOG.info("Starrocks skip preCommit currentBufferBytes {} less than buffMaxbytes {}"
-                    + " or SinceLastFlushTime {} less than bufferFlushInterval {}",
-                    currentBufferBytes, buffMaxbytes, System.currentTimeMillis() - lastFlushTime, bufferFlushInterval);
+        long timeSinceLastFlush = System.currentTimeMillis() - lastFlushTime;
+        
+        // Improved batching logic: flush if either condition is met (OR logic instead of AND)
+        // This allows for better batching by prioritizing size-based batching over time-based
+        boolean shouldFlush = currentBufferBytes >= buffMaxbytes || timeSinceLastFlush >= bufferFlushInterval;
+        
+        if (!shouldFlush) {
+            LOG.debug("Starrocks skip preCommit - currentBufferBytes {} (max: {}), timeSinceLastFlush {} ms (max: {} ms)",
+                    currentBufferBytes, buffMaxbytes, timeSinceLastFlush, bufferFlushInterval);
             return Collections.emptyMap();
         }
+        
         Throwable flushException = null;
         try {
-            LOG.info("Starrocks preCommit flush currentBufferBytes {} and SinceLastFlushTime {}",
-                    currentBufferBytes, System.currentTimeMillis() - lastFlushTime);
+            LOG.info("Starrocks preCommit flush triggered - currentBufferBytes: {} bytes, timeSinceLastFlush: {} ms",
+                    currentBufferBytes, timeSinceLastFlush);
             loadManager.flush();
         } catch (Exception e) {
             flushException = e;
@@ -389,6 +405,6 @@ public class StarRocksSinkTask extends SinkTask  {
 
     @Override
     public void stop() {
-        LOG.info("Starrocks sink task stopped. version is " + Util.VERSION);
+        LOG.info("Starrocks sink task stopped. version is {}", Util.getVersionInfo());
     }
 }
