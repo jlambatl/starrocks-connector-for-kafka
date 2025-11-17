@@ -14,7 +14,7 @@ RUN mvn clean package assembly:single -DskipTests && \
     ls -la target/
 
 # Stage 2: Runtime image with Kafka Connect
-FROM confluentinc/cp-kafka-connect:7.9.4
+FROM confluentinc/cp-kafka-connect:sha256:6a4cbeb1c9d8422e627a3be771b73753603cf2df26ab5a1551628d536f07d74a
 
 ENV STARROCKS_CONNECTOR_NAME=starrocks-kafka-connector
 
